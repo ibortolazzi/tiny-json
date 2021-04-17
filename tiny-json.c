@@ -30,6 +30,7 @@
 #include <string.h>
 #include <ctype.h>
 #include "tiny-json.h"
+#define MAX_PROPERTY_SIZE 64
 
 /** Structure to handle a heap of JSON properties. */
 typedef struct jsonStaticPool_s {
@@ -42,19 +43,35 @@ typedef struct jsonStaticPool_s {
 /* Search a property by its name in a JSON object. */
 json_t const* json_getProperty( json_t const* obj, char const* property ) {
     json_t const* sibling;
-    for( sibling = obj->u.c.child; sibling; sibling = sibling->sibling )
-        if ( sibling->name && !strcmp( sibling->name, property ) )
+    for( sibling = obj->u.c.child; sibling; sibling = sibling->sibling ){
+        if (strlen(property)>MAX_PROPERTY_SIZE)
+        {
+            return 0;
+        }
+        else{
+            if ( sibling->name && !strncmp( sibling->name, property,MAX_PROPERTY_SIZE) ){
             return sibling;
+            }
+        }      
+    }
     return 0;
 }
 
 /* Search a property by its name in a JSON object and return its value. */
 char const* json_getPropertyValue( json_t const* obj, char const* property ) {
 	json_t const* field = json_getProperty( obj, property );
-	if ( !field ) return 0;
+	if ( !field ){
+        return 0;
+    }
+    else {
         jsonType_t type = json_getType( field );
-        if ( JSON_ARRAY >= type ) return 0;
-	return json_getValue( field );
+        if ( JSON_ARRAY >= type ){
+            return 0;
+        }
+        else {
+	        return json_getValue( field );
+        }
+    }
 }
 
 /* Internal prototypes: */
@@ -69,14 +86,20 @@ static bool isEndOfPrimitive( char ch );
 /* Parse a string to get a json. */
 json_t const* json_createWithPool( char *str, jsonPool_t *pool ) {
     char* ptr = goBlank( str );
-    if ( !ptr || (*ptr != '{' && *ptr != '[') ) return 0;
+    if ( !ptr || (*ptr != '{' && *ptr != '[') ){
+        return 0;
+    }
     json_t* obj = pool->init( pool );
     obj->name    = 0;
     obj->sibling = 0;
     obj->u.c.child = 0;
     ptr = objValue( ptr, obj, pool );
-    if ( !ptr ) return 0;
-    return obj;
+    if ( !ptr ){
+        return 0;
+    }
+    else {
+        return obj;
+    }
 }
 
 /* Parse a string to get a json. */
@@ -101,9 +124,11 @@ static char getEscape( char ch ) {
         { 'r',  '\r' }, { 't',  '\t' },
     };
     unsigned int i;
-    for( i = 0; i < sizeof pair / sizeof *pair; ++i )
-        if ( pair[i].ch == ch )
+    for( i = 0; i < sizeof pair / sizeof *pair; ++i ){
+        if ( pair[i].ch == ch ){
             return pair[i].code;
+        }
+    }
     return '\0';
 }
 
@@ -113,9 +138,11 @@ static char getEscape( char ch ) {
   * @retval '\0' In other cases. */
 static unsigned char getCharFromUnicode( unsigned char const* str ) {
     unsigned int i;
-    for( i = 0; i < 4; ++i )
-        if ( !isxdigit( str[i] ) )
+    for( i = 0; i < 4; ++i ){
+        if ( !isxdigit( str[i] ) ){
             return '\0';
+        }
+    }
     return '?';
 }
 
@@ -135,17 +162,23 @@ static char* parseString( char* str ) {
         if ( *head == '\\' ) {
             if ( *++head == 'u' ) {
                 char const ch = getCharFromUnicode( ++head );
-                if ( ch == '\0' ) return 0;
+                if ( ch == '\0' ){
+                    return 0;
+                }
                 *tail = ch;
                 head += 3;
             }
             else {
                 char const esc = getEscape( *head );
-                if ( esc == '\0' ) return 0;
+                if ( esc == '\0' ){
+                    return 0;
+                }
                 *tail = esc;
             }
         }
-        else *tail = *head;
+        else{
+             *tail = *head;
+        }
     }
     return 0;
 }
@@ -158,10 +191,16 @@ static char* parseString( char* str ) {
 static char* propertyName( char* ptr, json_t* property ) {
     property->name = ++ptr;
     ptr = parseString( ptr );
-    if ( !ptr ) return 0;
+    if ( !ptr ){
+        return 0;
+    }
     ptr = goBlank( ptr );
-    if ( !ptr ) return 0;
-    if ( *ptr++ != ':' ) return 0;
+    if ( !ptr ){
+        return 0;
+    }
+    if ( *ptr++ != ':' ){
+        return 0;
+    }
     return goBlank( ptr );
 }
 
@@ -173,7 +212,9 @@ static char* propertyName( char* ptr, json_t* property ) {
 static char* textValue( char* ptr, json_t* property ) {
     ++property->u.value;
     ptr = parseString( ++ptr );
-    if ( !ptr ) return 0;
+    if ( !ptr ){
+        return 0;
+    }
     property->type = JSON_TEXT;
     return ptr;
 }
@@ -184,9 +225,11 @@ static char* textValue( char* ptr, json_t* property ) {
   * @retval Pointer to next character.
   * @retval Null pointer if any error occur. */
 static char* checkStr( char* ptr, char const* str ) {
-    while( *str )
-        if ( *ptr++ != *str++ )
+    while( *str ){
+        if ( *ptr++ != *str++ ){
             return 0;
+        }
+    }
     return ptr;
 }
 
@@ -200,7 +243,9 @@ static char* checkStr( char* ptr, char const* str ) {
   * @retval Null pointer if any error occur. */
 static char* primitiveValue( char* ptr, json_t* property, char const* value, jsonType_t type ) {
     ptr = checkStr( ptr, value );
-    if ( !ptr || !isEndOfPrimitive( *ptr ) ) return 0;
+    if ( !ptr || !isEndOfPrimitive( *ptr ) ){
+        return 0;
+    }
     ptr = setToNull( ptr );
     property->type = type;
     return ptr;
@@ -241,8 +286,12 @@ static char* nullValue( char* ptr, json_t* property ) {
   * @retval Pointer to first non numerical after the string. If success.
   * @retval Null pointer if any error occur. */
 static char* expValue( char* ptr ) {
-    if ( *ptr == '-' || *ptr == '+' ) ++ptr;
-    if ( !isdigit( (int)(*ptr) ) ) return 0;
+    if ( *ptr == '-' || *ptr == '+' ){
+        ++ptr;
+    }
+    if ( !isdigit( (int)(*ptr) ) ){
+        return 0;
+    }
     ptr = goNum( ++ptr );
     return ptr;
 }
@@ -252,9 +301,13 @@ static char* expValue( char* ptr ) {
   * @retval Pointer to first non numerical after the string. If success.
   * @retval Null pointer if any error occur. */
 static char* fraqValue( char* ptr ) {
-    if ( !isdigit( (int)(*ptr) ) ) return 0;
+    if ( !isdigit( (int)(*ptr) ) ){
+        return 0;
+    }
     ptr = goNum( ++ptr );
-    if ( !ptr ) return 0;
+    if ( !ptr ){
+        return 0;
+    }
     return ptr;
 }
 
@@ -265,25 +318,39 @@ static char* fraqValue( char* ptr ) {
   * @retval Pointer to first non white space after the string. If success.
   * @retval Null pointer if any error occur. */
 static char* numValue( char* ptr, json_t* property ) {
-    if ( *ptr == '-' ) ++ptr;
-    if ( !isdigit( (int)(*ptr) ) ) return 0;
+    if ( *ptr == '-' ){
+        ++ptr;
+    }
+    if ( !isdigit( (int)(*ptr) ) ){
+        return 0;
+    }
     if ( *ptr != '0' ) {
         ptr = goNum( ptr );
-        if ( !ptr ) return 0;
+        if ( !ptr ){
+            return 0;
+        }
     }
-    else if ( isdigit( (int)(*++ptr) ) ) return 0;
+    else if ( isdigit( (int)(*++ptr) ) ){
+        return 0;
+    }
     property->type = JSON_INTEGER;
     if ( *ptr == '.' ) {
         ptr = fraqValue( ++ptr );
-        if ( !ptr ) return 0;
+        if ( !ptr ){
+            return 0;
+        }
         property->type = JSON_REAL;
     }
     if ( *ptr == 'e' || *ptr == 'E' ) {
         ptr = expValue( ++ptr );
-        if ( !ptr ) return 0;
+        if ( !ptr ){
+            return 0;
+        }
         property->type = JSON_REAL;
     }
-    if ( !isEndOfPrimitive( *ptr ) ) return 0;
+    if ( !isEndOfPrimitive( *ptr ) ){
+        return 0;
+    }
     if ( JSON_INTEGER == property->type ) {
         char const* value = property->u.value;
         bool const negative = *value == '-';
@@ -291,12 +358,16 @@ static char* numValue( char* ptr, json_t* property ) {
         static char const max[] = "9223372036854775807";
         unsigned int const maxdigits = ( negative? sizeof min: sizeof max ) - 1;
         unsigned int const len = ( unsigned int const ) ( ptr - value );
-        if ( len > maxdigits ) return 0;
+        if ( len > maxdigits ){
+            return 0;
+        }
         if ( len == maxdigits ) {
             char const tmp = *ptr;
-            *ptr = '\0';
             char const* const threshold = negative ? min: max;
-            if ( 0 > strcmp( threshold, value ) ) return 0;
+            *ptr = '\0';
+        if ( 0 > strncmp( threshold, value, len) ){
+                return 0;
+            }
             *ptr = tmp;
         }
     }
@@ -331,7 +402,9 @@ static char* objValue( char* ptr, json_t* obj, jsonPool_t* pool ) {
     ptr++;
     for(;;) {
         ptr = goBlank( ptr );
-        if ( !ptr ) return 0;
+        if ( !ptr ){
+            return 0;
+        }
         if ( *ptr == ',' ) {
             ++ptr;
             continue;
@@ -340,20 +413,29 @@ static char* objValue( char* ptr, json_t* obj, jsonPool_t* pool ) {
         if ( *ptr == endchar ) {
             *ptr = '\0';
             json_t* parentObj = obj->sibling;
-            if ( !parentObj ) return ++ptr;
+            if ( !parentObj ){
+                return ++ptr;
+            }
             obj->sibling = 0;
             obj = parentObj;
             ++ptr;
             continue;
         }
         json_t* property = pool->alloc( pool );
-        if ( !property ) return 0;
+        if ( !property )
+            return 0;
         if( obj->type != JSON_ARRAY ) {
-            if ( *ptr != '\"' ) return 0;
+            if ( *ptr != '\"' ){
+                return 0;
+            }
             ptr = propertyName( ptr, property );
-            if ( !ptr ) return 0;
+            if ( !ptr ){
+                return 0;
+            }
         }
-        else property->name = 0;
+        else{
+            property->name = 0;
+        }
         add( obj, property );
         property->u.value = ptr;
         switch( *ptr ) {
@@ -371,13 +453,25 @@ static char* objValue( char* ptr, json_t* obj, jsonPool_t* pool ) {
                 obj = property;
                 ++ptr;
                 break;
-            case '\"': ptr = textValue( ptr, property );  break;
-            case 't':  ptr = trueValue( ptr, property );  break;
-            case 'f':  ptr = falseValue( ptr, property ); break;
-            case 'n':  ptr = nullValue( ptr, property );  break;
-            default:   ptr = numValue( ptr, property );   break;
+            case '\"':
+                ptr = textValue( ptr, property );
+                break;
+            case 't':
+                ptr = trueValue( ptr, property );
+                break;
+            case 'f':
+                ptr = falseValue( ptr, property );
+                break;
+            case 'n':
+                ptr = nullValue( ptr, property );
+                break;
+            default:
+                ptr = numValue( ptr, property );
+                break;
         }
-        if ( !ptr ) return 0;
+        if ( !ptr ){
+            return 0;
+        }
     }
 }
 
@@ -396,7 +490,9 @@ static json_t* poolInit( jsonPool_t* pool ) {
   * @retval Null pointer if the pool was empty. */
 static json_t* poolAlloc( jsonPool_t* pool ) {
     jsonStaticPool_t *spool = json_containerOf( pool, jsonStaticPool_t, pool );
-    if ( spool->nextFree >= spool->qty ) return 0;
+    if ( spool->nextFree >= spool->qty ){
+        return 0;
+    }
     return spool->mem + spool->nextFree++;
 }
 
@@ -405,9 +501,11 @@ static json_t* poolAlloc( jsonPool_t* pool ) {
   * @param set Set of characters. It is just a null-terminated string.
   * @return true or false there is membership or not. */
 static bool isOneOfThem( char ch, char const* set ) {
-    while( *set != '\0' )
-        if ( ch == *set++ )
+    while( *set != '\0' ){
+        if ( ch == *set++ ){
             return true;
+        }
+    }
     return false;
 }
 
@@ -417,8 +515,9 @@ static bool isOneOfThem( char ch, char const* set ) {
   * @return The final pointer value or null pointer if the null character was found. */
 static char* goWhile( char* str, char const* set ) {
     for(; *str != '\0'; ++str ) {
-        if ( !isOneOfThem( *str, set ) )
+        if ( !isOneOfThem( *str, set ) ){
             return str;
+        }
     }
     return 0;
 }
@@ -438,8 +537,9 @@ static char* goBlank( char* str ) {
   * @return The final pointer value or null pointer if the null character was found. */
 static char* goNum( char* str ) {
     for( ; *str != '\0'; ++str ) {
-        if ( !isdigit( (int)(*str) ) )
+        if ( !isdigit( (int)(*str) ) ){
             return str;
+        }
     }
     return 0;
 }
@@ -451,7 +551,9 @@ static char const* const endofblock = "}]";
   * @param ch Pointer to character.
   * @return  Final value pointer. */
 static char* setToNull( char* ch ) {
-    if ( !isOneOfThem( *ch, endofblock ) ) *ch++ = '\0';
+    if ( !isOneOfThem( *ch, endofblock ) ){
+        *ch++ = '\0';
+    }
     return ch;
 }
 
