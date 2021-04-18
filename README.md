@@ -1,6 +1,9 @@
 # tiny-json
 
-[![Build Status](https://travis-ci.org/rafagafe/tiny-json.svg?branch=master)](https://travis-ci.org/rafagafe/tiny-json) [![GitHub contributors](https://img.shields.io/github/contributors/rafagafe/tiny-json.svg)](https://github.com/rafagafe/tiny-json/graphs/contributors)
+[![Build Status](https://travis-ci.com/ibortolazzi/tiny-json.svg?branch=master)](https://travis-ci.com/ibortolazzi/tiny-json) [![GitHub contributors](https://img.shields.io/github/contributors/ibortolazzi/tiny-json.svg)](https://github.com/ibortolazzi/tiny-json/graphs/contributors)
+
+This is a fork of (the great) https://github.com/rafagafe/tiny-json. The intension of this fork is to add extra security to the code removing not protected functions such as atoll, strcmp, etc. Moreover, the idea is to contribute with these changes to the original project if possible and keep this one updated too.
+To acheive this in tiny-json.h the MAX_PROPERTY_SIZE is defined by default as 64 but can be changed by the user.
 
 tiny-json is a versatile and easy to use json parser in C suitable for embedded systems. It is fast, robust and portable.
 
